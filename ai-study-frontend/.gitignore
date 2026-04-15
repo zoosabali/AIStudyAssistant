@@ -1,0 +1,21 @@
+# Build folders
+bin/
+obj/
+
+# Frontend
+ai-study-frontend/node_modules/
+ai-study-frontend/dist/
+
+# VS Code
+.vscode/
+
+# User settings
+*.user
+*.suo
+
+# App secrets
+appsettings.Development.json
+appsettings.json
+
+# Logs
+*.log
