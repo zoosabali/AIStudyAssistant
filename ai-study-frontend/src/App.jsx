@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import "./App.css";
 
 function App() {
+  const API_BASE = "https://aistudyassistant-api-cggrd5gudtd4aedm.centralus-01.azurewebsites.net";
   const [question, setQuestion] = useState("");
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -27,7 +28,7 @@ function App() {
     }));
 
     try {
-      await fetch("http://localhost:5051/documents/bulk", {
+      await fetch(`${API_BASE}/documents/bulk`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -52,7 +53,7 @@ function App() {
   try {
     setLoading(true);
 
-    const res = await fetch("http://localhost:5051/documents/ask", {
+    const res = await fetch(`${API_BASE}/documents/ask`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -60,7 +61,11 @@ function App() {
       body: JSON.stringify({ question: userMessage.text })
     });
 
-    const data = await res.json();
+    if (!res.ok) {
+  throw new Error(`Server error: ${res.status}`);
+}
+
+const data = await res.json();
 
     const botMessage = {
       role: "bot",
