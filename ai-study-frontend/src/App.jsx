@@ -5,15 +5,50 @@ import "./App.css";
 function App() {
   const API_BASE = "https://aistudyassistant-api-cggrd5gudtd4aedm.centralus-01.azurewebsites.net";
   const [question, setQuestion] = useState("");
-  const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [messages, setMessages] = useState([]);
   const [fileName, setFileName] = useState("");
   const chatEndRef = useRef(null);
+  const [mode, setMode] = useState("Normal");
+  const [stage, setStage] = useState("idle");
+  const [attempt, setAttempt] = useState("");
+  const [notInNotes, setNotInNotes] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState("");
+
+  const handleModeChange = (newMode) => {
+  setMode(newMode);
+
+  if(notInNotes) {
+    setStage("final");
+    return;
+  }
+
+
+  setAttempt(newMode);
+  setNotInNotes(false);
+
+  if (!currentQuestion) {
+    setStage("idle");
+    setLastResponse("");
+    return;
+  }
+
+  // Smart re-entry logic
+  if (newMode === "Normal") {
+    setStage("final");   // show direct answer if exists
+  }
+
+  if(newMode === "Sinkin"){
+    setAttempt("");
+    setStage("attempt");
+  }
+};
+
+  const [lastResponse, setLastResponse] = useState("");
+  
   useEffect(() => {
   chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-}, [messages, loading]);
+}, [loading, lastResponse]);
+
   const handleFileUpload = async (e) => {
   const file = e.target.files[0];
   setFileName(file.name);
@@ -42,13 +77,17 @@ function App() {
     alert("❌ Upload failed");
   }
 };
-  const handleAsk = async () => {
-    if (!question.trim()) return;
 
-  const userMessage = { role: "user", text: question };
+//HANDLE ASK
+const handleAsk = async () => {
 
-  setMessages(prev => [...prev, userMessage]);
+  if (!question.trim()) return;
+
+  setCurrentQuestion(question);
   setQuestion("");
+  setAttempt("");
+  setLastResponse("");
+  setNotInNotes(false);
 
   try {
     setLoading(true);
@@ -58,30 +97,77 @@ function App() {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ question: userMessage.text })
+      body: JSON.stringify({ question })
     });
 
-    if (!res.ok) {
-  throw new Error(`Server error: ${res.status}`);
-}
+    const data = await res.json();
 
-const data = await res.json();
+    const isNotInNotes =
+      data.answer &&
+      data.answer.toLowerCase().includes("i could not find this in your notes");
 
-    const botMessage = {
-      role: "bot",
-      text: data.answer,
-      confidence: data.confidence?.label,
-      sources: data.sources
-    };
+    if (isNotInNotes) {
+      setNotInNotes(true);
+      setLastResponse(data.answer);
+      setStage("final");
+      return;
+    }
 
-    setMessages(prev => [...prev, botMessage]);
+    // NORMAL MODE
+    if (mode === "Normal") {
+      setLastResponse(data.answer);
+      setStage("final");
+      return;
+    }
 
-  } catch (err) {
+    // SINKIN MODE
+    if (mode === "Sinkin") {
+      setLastResponse(data.answer);
+      setStage("attempt");
+      return;
+    }
+
+  } 
+  
+  catch (err) 
+  {
     console.error(err);
+    setLastResponse("Something went wrong. Please try again.");
+    setStage("final")
   } finally {
     setLoading(false);
   }
 };
+
+const submitAttempt = async () => {
+  setLoading(true);
+
+  const res = await fetch(`${API_BASE}/documents/ask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      question: currentQuestion,
+      mode,
+      userAttempt: attempt,
+      stageType: "Feedback"
+    })
+  });
+  setStage("feedback");
+  const data = await res.json();
+
+  //setMessages(prev => [...prev, { role: "bot", text: data.answer }]);
+  setLastResponse(data.answer);
+  setStage("feedback");
+  setLoading(false);
+};
+
+const step =
+  stage === "attempt" ? 1 :
+  stage === "feedback" ? 2 :
+  stage === "explanation" ? 3 :
+  stage === "final" ? 4 : 0;
 
   return (
   <div className="app-container">
@@ -108,7 +194,22 @@ const data = await res.json();
   </label>
 </div>
 
-      {/* Input */}
+<div className="mode-toggle">
+  <label className="switch">
+    <input
+      type="checkbox"
+      checked={mode === "Sinkin"}
+      onChange={(e) =>
+        handleModeChange(e.target.checked ? "Sinkin" : "Normal")
+      }
+    />
+    <span className="slider"></span>
+  </label>
+
+  <span className="mode-label-text">
+    {mode === "Sinkin" ? "Sinkin Mode" : "Normal Mode"}
+  </span>
+</div>
       <div className="input-section">
         <input
   className="question-input"
@@ -131,28 +232,182 @@ const data = await res.json();
         </button>
       </div>
 
+{mode === "Sinkin" && !notInNotes && (
+  <>
+  <div className="progress-container">
+    <div
+      className="progress-fill"
+      style={{ width: `${(step / 4) * 100}%` }}
+    />
+  </div>
+
+  <div className="progress-steps">
+      <span className={step >= 1 ? "active" : ""}>Think</span>
+      <span className={step === 2 ? "current" : step > 2 ? "done" : ""}>
+        Refine
+      </span>
+      <span className={step >= 3 ? "active" : ""}>Understand</span>
+      <span className={step >= 4 ? "active" : ""}>Master</span>
+    </div>
+  </>
+)}
+
+
+{currentQuestion && (
+  <div className="question-card">
+    {currentQuestion}
+  </div>
+)}
+
+{mode === "Sinkin" && 
+currentQuestion &&
+!notInNotes &&
+(stage === "attempt" || stage ==="idle") && (
+  <div className="sinkin-card">
+    <h3>Think first</h3>
+      <p className="mode-label">
+          🧠 Guided Mode — Think first, then refine
+      </p>
+<p className="hint-text">
+  Don’t worry about being perfect — just think out loud.
+</p>
+
+    <textarea
+      value={attempt}
+      onChange={(e) => setAttempt(e.target.value)}
+      onKeyDown={(e) => {
+         if (e.key === "Enter" && !attempt.trim()) {
+      e.preventDefault();
+      }
+    // e.target.style.height = "auto";
+    // e.target.style.height = e.target.scrollHeight + "px";
+  }}
+      placeholder={`Explain in your own words...
+
+Start simple:
+• What is it?
+• How does it work?`}
+    />
+<button
+  className="submit-btn"
+  onClick={submitAttempt}
+  disabled={!attempt.trim()}
+>
+  Submit Attempt
+</button>
+
+{!attempt.trim() && (
+  <div className="hint-text">
+    Write your understanding to continue
+  </div>
+)}
+   
+     <span>{attempt.length} characters</span>
+  </div>
+)}
+
+{stage === "explanation" && (
+  <div className="sinkin-card">
+    <h3>Understand the concept</h3>
+
+    <pre>{lastResponse}</pre>
+
+    <button onClick={async () => {
+      setLoading(true);
+
+      const res = await fetch(`${API_BASE}/documents/ask`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          question: currentQuestion,
+          mode,
+          userAttempt: attempt,
+          stageType: "Final"
+        })
+      });
+
+      const data = await res.json();
+
+      setLastResponse(data.answer);
+      setStage("final");
+      setLoading(false);
+    }}>
+      Reveal Final Answer
+    </button>
+  </div>
+)}
+
+{stage === "feedback" && (
+  <div className="sinkin-card">
+    <h3>Refine your thinking</h3>
+
+    <pre>{lastResponse}</pre>
+
+    <button onClick={async () => {
+      setLoading(true);
+
+      const res = await fetch(`${API_BASE}/documents/ask`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          question: currentQuestion,
+          mode,
+          userAttempt: attempt,
+          stageType: "Explanation"
+        })
+      });
+
+      const data = await res.json();
+
+      setLastResponse(data.answer);
+      setStage("explanation");
+      setLoading(false);
+    }}>
+      Continue to Explanation
+    </button>
+  </div>
+)}
+
+{/* { stage === "final" && (
+  <div className="sinkin-card">
+    <h3>Final Answer</h3>
+
+    <pre>{lastResponse}</pre>
+  </div>
+)} */}
+
+{stage === "final" && (
+  <div className="sinkin-card">
+    <h3>Final Answer</h3>
+
+    <pre>
+      {/* {mode === "Sinkin"
+        ? lastResponse
+        : messages[0]?.text} */}
+        {lastResponse}
+    </pre>
+  </div>
+)}
+
+
+
       {/* Chat */}
       <div className="chat-box">
-        {messages.map((msg, i) => (
+
+        {/* {messages.map((msg, i) => (
           <div
             key={i}
             className={`message-row ${msg.role === "user" ? "user" : "bot"}`}
           >
             <div className="message-bubble">
               <p>{msg.text}</p>
-
-              {/* {msg.role === "bot" && (
-                <>
-                  {msg.confidence && (
-                    <p>
-                      <strong>Confidence:</strong> {msg.confidence}
-                    </p>
-                  )}
-                </>
-              )} */}
             </div>
           </div>
-        ))}
+        ))} */}
 
         {loading && (
           <div className="message-row bot">

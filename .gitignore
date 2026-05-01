@@ -13,9 +13,22 @@ ai-study-frontend/dist/
 *.user
 *.suo
 
-# App secrets
+# Environment files
+.env
+.env.local
+
+# App secrets (development only)
 appsettings.Development.json
-appsettings.json
 
 # Logs
 *.log
+
+# Binaries
+*.dll
+*.exe
+*.pdb
+
+# Mac
+.DS_Store
+
+publish/

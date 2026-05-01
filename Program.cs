@@ -1,26 +1,29 @@
 using Azure.AI.OpenAI;
 using Azure;
 
-
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddSingleton<DocumentService>();
-
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-builder.Services.AddOpenApi();
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
         policy =>
         {
-            policy.WithOrigins("http://localhost:5173")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
+            policy
+                .WithOrigins(
+                    "http://localhost:5173"
+                    ,"https://ai-study-frontend-rho.vercel.app"
+                )
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
         });
 });
+
+builder.Services.AddSingleton<DocumentService>();
+
+//builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<AzureOpenAIClient>(sp =>
 {
@@ -31,20 +34,20 @@ builder.Services.AddSingleton<AzureOpenAIClient>(sp =>
     return new AzureOpenAIClient(endpoint, new AzureKeyCredential(apiKey));
 });
 
+builder.Services.AddControllers()
+.AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(
+        new System.Text.Json.Serialization.JsonStringEnumConverter()
+    );
+});
 
 var app = builder.Build();
+
+app.UseHttpsRedirection();
+app.UseCors("AllowFrontend");
 app.UseSwagger();
 app.UseSwaggerUI();
-
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-app.UseCors("AllowFrontend");
-//app.UseHttpsRedirection();
-
-//app.MapControllers();   // important — keep before minimal APIs
-
 
 var summaries = new[]
 {
@@ -62,13 +65,8 @@ app.MapGet("/weatherforecast", () =>
 
     return forecast;
 });
-// if(app.Environment.IsDevelopment())
-// {
-//     app.MapOpenApi();
-// }
 
-
-app.MapControllers();   // important — keep before minimal APIs
+app.MapControllers();
 app.MapGet("/test", () => "API is working");
 app.Run();
 

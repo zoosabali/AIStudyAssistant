@@ -7,11 +7,13 @@ using OpenAI.Chat;
 using System.Linq;
 using System.Runtime.Intrinsics.X86;
 using Azure.AI.FormRecognizer.DocumentAnalysis;
+using Microsoft.AspNetCore.Cors;
 
 namespace AIStudyAssistant.Controllers;
 
 [ApiController]
 [Route("documents")]
+[EnableCors("AllowFrontend")]
 public class DocumentController : ControllerBase
 {
     private readonly AzureOpenAIClient _client;
@@ -220,21 +222,22 @@ public async Task<IActionResult> UploadFile(IFormFile file)
         var questionEmbeddingResponse = await embeddingClient.GenerateEmbeddingAsync(request.Question);
         var questionEmbedding = questionEmbeddingResponse.Value.ToFloats().ToArray().ToList();
 
-        // var documents = _documentService.GetAll();
+        var mode = request.Mode;
+        var stage = request.StageType;
 
-        // //var scoredDocs = documents
+        if(request.Mode == AskMode.Sinkin && string.IsNullOrWhiteSpace(request.UserAttempt))
+        {
+            return BadRequest("In SinkIn Mode, you must provide an attempt first");
+        }
 
-        // var scoredDocs = documents
-        //     .Select(d => new
-        //     {
-        //         Doc = d,
-        //         Score = d.Embedding != null && d.Embedding.Any()
-        //         ? CosineSimilarity(d.Embedding, questionEmbedding)
-        //         : 0
-        //         //Score = CosineSimilarity(d.Embedding, questionEmbedding)
-        //     })
-        //     .OrderByDescending(x => x.Score)
-        //     .ToList();
+        if (mode == AskMode.Normal)
+        {
+            Console.WriteLine("Normal mode");
+        }
+        else if (mode == AskMode.Sinkin)
+        {
+            Console.WriteLine($"SinkIn mode - Stage: {stage}");
+        }
 
         var results = _documentService.Search(questionEmbedding);
 
@@ -303,56 +306,141 @@ public async Task<IActionResult> UploadFile(IFormFile file)
                 topDocs.Select(d => $"Title: {d.Title}\nContent: {d.Content}")
                 );
 
-        var prompt = $"""
-        You are a helpful study assistant.
+            string prompt = "";
 
-        Use ONLY the provided notes to answer the question.
+            if(request.Mode == AskMode.Sinkin && request.StageType==Stage.Feedback)
+            {
+                prompt = $"""
 
-        Notes:
-        {context}
+                You are a strict tutor.
 
-        Question:
-        {request.Question}
-        """;
+                You MUST NOT give the final answer.
+                You MUST NOT explain the concept fully.
+                Be slightly challenging. Do not be overly polite.
+                Encourage deeper thinking.
+
+                You are evaluating a student's answer using the notes below.
+
+                Notes:
+                {context}
+
+                Question:
+                {request.Question}
+
+                Student Answer:
+                {request.UserAttempt}
+
+                ---
+
+                Return EXACTLY:
+
+                What you got right:
+                - ...
+
+                What needs improvement:
+                - ...
+
+                Think about:
+                - Question 1
+                - Question 2
+
+                Hint:
+                ...
+                """;
+            }
+            else if(request.Mode == AskMode.Sinkin && request.StageType == Stage.Explanation)
+            {
+            prompt = $"""
+                You are a tutor.
+
+                Explain the concept clearly using the notes below.
+
+                DO NOT give the final answer. 
+                DO NOT define the concept directly.
+                Do NOT fully conclude the concept.
+                Leave some room for the learner to connect the dots.
+
+                Focus on:
+                - how it works
+                - step-by-step intuition
+                - simple explanation
+
+                Notes:
+                {context}
+
+                Question:
+                {request.Question}
+                """;
+            }
+            else if (request.Mode == AskMode.Sinkin && request.StageType == Stage.Final)
+            {
+                prompt = $"""
+                You are a helpful study assistant.
+
+                Give a clear and complete answer using the notes.
+
+                Notes:
+                {context}
+
+                Question:
+                {request.Question}
+                """;
+            }
+            else 
+            {
+                prompt = $"""
+                You are a helpful study assistant.
+
+                Use ONLY the provided notes to answer the question.
+
+                Notes:
+                {context}
+
+                Question:
+                {request.Question}
+                """;
+            }
+
+            if (request.Mode == AskMode.Sinkin)
+            {
+                if (request.StageType == Stage.Explanation && string.IsNullOrWhiteSpace(request.UserAttempt))
+                {
+                    return BadRequest("You must attempt first before explanation.");
+                }
+
+                if (request.StageType == Stage.Final && string.IsNullOrWhiteSpace(request.UserAttempt))
+                {
+                    return BadRequest("You must attempt first before final answer.");
+                }
+            }
+
+            if (request.Mode == AskMode.Sinkin && request.StageType == Stage.Final)
+            {
+                return BadRequest("Please go through feedback and explanation before viewing the final answer.");
+            }
 
         var chatClient = _client.GetChatClient(deploymentName);
-
         var response = await chatClient.CompleteChatAsync(
             new List<ChatMessage>
             {
-                new SystemChatMessage
-                (
-                "You are a study assistant. Answer ONLY using the provided context.\n\n" +
-                "Rules:\n" +
-                "- Do NOT use external knowledge\n" +
-                "- If something is not explicitly present in the context, DO NOT include it." +
-                "- If answer is not found, say: 'I could not find this in your notes.'\n\n" +
-
-                "Formatting Rules:\n" +
-                "- Always structure answers clearly\n" +
-                "- Use bullet points when possible\n" +
-                "- For comparisons, use sections like:\n" +
-                "  BFS:\n" +
-                "  DFS:\n" +
-                "- Keep answers concise but informative\n" +
-                "- Do NOT repeat the question\n"
-                ),
+                request.Mode == AskMode.Sinkin && request.StageType == Stage.Feedback
+                ? new SystemChatMessage("You are a strict tutor. Do NOT give answers. Only guide the student.")
+                : new SystemChatMessage("You are a study assistant. Answer ONLY using the provided context."), 
                 new UserChatMessage(prompt)
-            
             });
 
-    var sources = matchedDocs
-    .GroupBy(d => ExtractTitle(d.Content))
-    .Select(g => g.First())
-    .Select(d => new
-    {
-        title = ExtractTitle(d.Content),
-        score = d.Score,
-        preview = d.Content.Length > 120
-            ? d.Content.Substring(0, 120) + "..."
-            : d.Content
-    })
-    .ToList();
+            var sources = matchedDocs
+            .GroupBy(d => ExtractTitle(d.Content))
+            .Select(g => g.First())
+            .Select(d => new
+            {
+                title = ExtractTitle(d.Content),
+                score = d.Score,
+                preview = d.Content.Length > 120
+                    ? d.Content.Substring(0, 120) + "..."
+                    : d.Content
+            })
+            .ToList();
 
         var explanation = $"This answer is based on the top {matchedDocs.Count} most relevant notes.";
 
@@ -372,21 +460,5 @@ public async Task<IActionResult> UploadFile(IFormFile file)
             sources,
             explanation
         });
-
-
-        // var answer = response.Value.Content[0].Text;
-
-        // matchedDocs = scoredDocs.Select(x => new MatchedDocument
-        // {       
-        //     Content = x.Doc.Content,
-        //     Score = x.Score
-        // }).ToList();
-
-        // return Ok(new
-        // {
-        //     answer = cleanedAnswer,
-        //     confidence = bestScore,
-        //     matchedDocs
-        // });
     }
 }
