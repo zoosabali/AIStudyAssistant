@@ -11,6 +11,7 @@ function App() {
   const [mode, setMode] = useState("Normal");
   const [stage, setStage] = useState("idle");
   const [attempt, setAttempt] = useState("");
+  const [finalAnswer, setFinalAnswer] = useState("");
   const [notInNotes, setNotInNotes] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState("");
 
@@ -18,7 +19,7 @@ function App() {
   setMode(newMode);
 
   if(notInNotes) {
-    setStage("final");
+    setStage("error");
     return;
   }
 
@@ -92,15 +93,32 @@ const handleAsk = async () => {
   try {
     setLoading(true);
 
+if (mode === "Sinkin") {
+
+  setStage("attempt");
+  return;                
+}
+
     const res = await fetch(`${API_BASE}/documents/ask`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ question })
+      body: JSON.stringify({ 
+        question,
+        mode,
+        stageType:"Final",
+        userAttempt: "",
+       })
     });
 
-    const data = await res.json();
+const text = await res.text();   // ✅ handle plain text
+
+const data = {
+  answer: text
+};
+
+    console.log(data);            
 
     const isNotInNotes =
       data.answer &&
@@ -109,36 +127,34 @@ const handleAsk = async () => {
     if (isNotInNotes) {
       setNotInNotes(true);
       setLastResponse(data.answer);
-      setStage("final");
+      setFinalAnswer(data.answer); 
+      setStage("error");
       return;
     }
 
     // NORMAL MODE
     if (mode === "Normal") {
       setLastResponse(data.answer);
+      setFinalAnswer(data.answer); 
       setStage("final");
       return;
     }
 
     // SINKIN MODE
     if (mode === "Sinkin") {
-      setLastResponse(data.answer);
-      setStage("attempt");
-      return;
-    }
+    setLastResponse("Think first before seeing the answer.");  // 👈 no backend dependency
+    setStage("attempt");
+    return;
+}
 
-  } 
-  
-  catch (err) 
-  {
+  } catch (err) {
     console.error(err);
     setLastResponse("Something went wrong. Please try again.");
-    setStage("final")
+    setStage("error");
   } finally {
     setLoading(false);
   }
 };
-
 const submitAttempt = async () => {
   setLoading(true);
 
@@ -262,7 +278,7 @@ const step =
 {mode === "Sinkin" && 
 currentQuestion &&
 !notInNotes &&
-(stage === "attempt" || stage ==="idle") && (
+(stage === "attempt") && (
   <div className="sinkin-card">
     <h3>Think first</h3>
       <p className="mode-label">
@@ -312,7 +328,7 @@ Start simple:
 
     <pre>{lastResponse}</pre>
 
-    <button onClick={async () => {
+    {/* {async () => {
       setLoading(true);
 
       const res = await fetch(`${API_BASE}/documents/ask`, {
@@ -323,7 +339,7 @@ Start simple:
         body: JSON.stringify({
           question: currentQuestion,
           mode,
-          userAttempt: attempt,
+          userAttempt: mode === "Sinkin" ? " " : "",
           stageType: "Final"
         })
       });
@@ -333,9 +349,15 @@ Start simple:
       setLastResponse(data.answer);
       setStage("final");
       setLoading(false);
-    }}>
-      Reveal Final Answer
-    </button>
+    }}
+      Reveal Final Answer */}
+    
+    <button onClick={() => {
+        setStage("final");
+      }}>
+  Reveal Final Answer
+</button>
+
   </div>
 )}
 
@@ -365,6 +387,7 @@ Start simple:
 
       setLastResponse(data.answer);
       setStage("explanation");
+      setFinalAnswer(data.answer);
       setLoading(false);
     }}>
       Continue to Explanation
@@ -372,29 +395,12 @@ Start simple:
   </div>
 )}
 
-{/* { stage === "final" && (
-  <div className="sinkin-card">
-    <h3>Final Answer</h3>
-
-    <pre>{lastResponse}</pre>
-  </div>
-)} */}
-
 {stage === "final" && (
   <div className="sinkin-card">
     <h3>Final Answer</h3>
-
-    <pre>
-      {/* {mode === "Sinkin"
-        ? lastResponse
-        : messages[0]?.text} */}
-        {lastResponse}
-    </pre>
+    <pre> {finalAnswer}</pre>
   </div>
 )}
-
-
-
       {/* Chat */}
       <div className="chat-box">
 

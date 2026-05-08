@@ -17,6 +17,7 @@ const scrollAccumulator = useRef(0);
 const isScrolling = useRef(false);
 const [direction, setDirection] = useState(1);
 const [showCTA, setShowCTA] = useState(false);
+const touchStartY = useRef(0);
 
 const handleScroll = (e) => {
   if (isScrolling.current) return;
@@ -43,6 +44,26 @@ const handleScroll = (e) => {
   }
 };
 
+const handleTouchStart = (e) => {
+  touchStartY.current = e.touches[0].clientY;
+};
+
+const handleTouchEnd = (e) => {
+  const touchEndY = e.changedTouches[0].clientY;
+  const deltaY = touchStartY.current - touchEndY;
+
+  const threshold = 50;
+
+  if (Math.abs(deltaY) < threshold) return;
+
+  const dir = deltaY > 0 ? 1 : -1;
+  setDirection(dir);
+
+  setCurrent((prev) =>
+    Math.max(0, Math.min(prev + dir, sections.length - 1))
+  );
+};
+
  useEffect(() => {
   if (current === sections.length - 1) {
     setTimeout(() => setShowCTA(true), 600); // delay = premium feel
@@ -56,6 +77,15 @@ const handleScroll = (e) => {
     return () => window.removeEventListener("wheel", handleScroll);
   }, []);
 
+
+  useEffect(() => {
+  document.body.style.overflow = "hidden";
+
+  return () => {
+    document.body.style.overflow = "auto";
+  };
+}, []);
+
   return (
 //   <div className="landing">
 //     <div key={current} className={`screen ${direction > 0 ? "down" : "up"}`}>
@@ -68,7 +98,10 @@ const handleScroll = (e) => {
 // )}
 //     </div>
 //   </div>
-<div key={current} className="screen">
+<div key={current} className="screen"
+  onTouchStart={handleTouchStart}
+  onTouchEnd={handleTouchEnd}
+>
 
   {current === sections.length - 1 ? (
     <>

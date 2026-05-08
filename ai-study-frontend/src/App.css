@@ -3,7 +3,7 @@ body {
   font-family: 'Inter', sans-serif; /* 👈 keep this */
   background: #0f172a;
   color: #EAEAEA;
-  font-size: 4rem;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -1px;
 }
@@ -26,7 +26,7 @@ body {
   opacity: 0;
   transform: translateY(30px) scale(0.98);
   transition: all 0.6 ease;
-  font-size: 4rem;
+  font-size: clamp(28px, 6vw, 48px);
   animation: fadeUp 0.6s ease forwards;
   font-weight: 700;
   letter-spacing: -1px;
@@ -120,14 +120,18 @@ body {
 .landing {
   height: 100vh;
   position: relative;
-  /*overflow-y: scroll;*/
+  overflow-y: auto;
   overflow:hidden;
   scroll-snap-type: y mandatory;
   scrollbar-width: none;
   max-width: 700px;
   margin: 0 auto;
   padding: 0 24px;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
 }
+
 
 .landing::-webkit-scrollbar {
   display: none; /* Chrome/Safari */
@@ -139,8 +143,10 @@ body {
   height: 100vh;
   display: flex;
   min-height: 100vh;
+  border: 1px solid red;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   justify-content: center;
   gap: 18px;
   scroll-snap-align: start;
@@ -154,7 +160,7 @@ body {
 /* TEXT SYSTEM (CLEAN + CONSISTENT) */
 .block h1,
 .block p {
-  font-size: 1.8rem;
+  font-size: clamp(16px, 4vw, 22px);
   line-height: 1.6;
   font-weight: 400;
   margin: 0;
@@ -162,7 +168,7 @@ body {
 
 /* HERO (ONLY PLACE WE DIFFER) */
 .hero h1 {
-  font-size: 3rem;
+  font-size: clamp(24px, 5vw, 36px);
   font-weight: 600;
 }
 
@@ -227,6 +233,7 @@ html, body {
   scroll-behavior: smooth;
   margin: 0;
   height: 100%;
+  /* overflow: hidden; */
   font-size: 16px;
 
 }
@@ -245,7 +252,8 @@ html, body {
 
 .title {
   text-align: center;
-  font-size: 3rem;
+  font-size: clamp(24px, 5vw, 3 rem);
+  text-align: center;
   font-weight: bold;
   color: white;
   margin-bottom: 20px;

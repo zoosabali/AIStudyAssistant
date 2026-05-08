@@ -32,3 +32,4 @@ appsettings.Development.json
 .DS_Store
 
 publish/
+.vercel

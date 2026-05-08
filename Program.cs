@@ -12,6 +12,7 @@ builder.Services.AddCors(options =>
                 .WithOrigins(
                     "http://localhost:5173"
                     ,"https://ai-study-frontend-rho.vercel.app"
+                    ,"https://ai-study-assistant-murex.vercel.app"
                 )
                 .AllowAnyHeader()
                 .AllowAnyMethod()

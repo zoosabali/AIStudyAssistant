@@ -227,7 +227,7 @@ public async Task<IActionResult> UploadFile(IFormFile file)
 
         if(request.Mode == AskMode.Sinkin && string.IsNullOrWhiteSpace(request.UserAttempt))
         {
-            return BadRequest("In SinkIn Mode, you must provide an attempt first");
+            return BadRequest("In Sinkin Mode, you must provide an attempt first");
         }
 
         if (mode == AskMode.Normal)
